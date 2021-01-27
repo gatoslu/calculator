@@ -60,8 +60,8 @@ namespace UnitConverterUnitTests
             c2units.push_back(u3);
             c2units.push_back(u4);
 
-            m_units[c1] = c1units;
-            m_units[c2] = c2units;
+            m_units[c1.id] = c1units;
+            m_units[c2.id] = c2units;
 
             unordered_map<Unit, ConversionData, UnitHash> unit1Map = unordered_map<Unit, ConversionData, UnitHash>();
             unordered_map<Unit, ConversionData, UnitHash> unit2Map = unordered_map<Unit, ConversionData, UnitHash>();
@@ -99,14 +99,14 @@ namespace UnitConverterUnitTests
             m_loadDataCallCount++;
         }
 
-        vector<Category> LoadOrderedCategories()
+        vector<Category> GetOrderedCategories()
         {
             return m_categories;
         }
 
-        vector<Unit> LoadOrderedUnits(const Category& c)
+        vector<Unit> GetOrderedUnits(const Category& category)
         {
-            return m_units[c];
+            return m_units[category.id];
         }
 
         unordered_map<Unit, ConversionData, UnitHash> LoadOrderedRatios(const Unit& u)
@@ -199,11 +199,11 @@ namespace UnitConverterUnitTests
         TEST_METHOD(UnitConverterTestGetters);
         TEST_METHOD(UnitConverterTestGetCategory);
         TEST_METHOD(UnitConverterTestUnitTypeSwitching);
-        TEST_METHOD(UnitConverterTestSerialization);
-        TEST_METHOD(UnitConverterTestDeSerialization);
         TEST_METHOD(UnitConverterTestQuote);
         TEST_METHOD(UnitConverterTestUnquote);
         TEST_METHOD(UnitConverterTestBackspace);
+        TEST_METHOD(UnitConverterTestBackspaceBasic);
+        TEST_METHOD(UnitConverterTestClear);
         TEST_METHOD(UnitConverterTestScientificInputs);
         TEST_METHOD(UnitConverterTestSupplementaryResultRounding);
         TEST_METHOD(UnitConverterTestMaxDigitsReached);
@@ -253,7 +253,7 @@ namespace UnitConverterUnitTests
     // Resets calculator state to start state after each test
     void UnitConverterTest::Cleanup()
     {
-        s_unitConverter->DeSerialize(wstring());
+        s_unitConverter->SendCommand(Command::Reset);
         s_testVMCallback->Reset();
     }
 
@@ -293,6 +293,41 @@ namespace UnitConverterUnitTests
         VERIFY_IS_TRUE(s_testVMCallback->CheckSuggestedValues(vector<tuple<wstring, Unit>>(begin(test2), end(test2))));
     }
 
+
+    // Verify a basic copy paste steam. '20.43' with backspace button pressed
+    void UnitConverterTest::UnitConverterTestBackspaceBasic()
+    {
+        s_unitConverter->SendCommand(Command::Two);
+        s_unitConverter->SendCommand(Command::Zero);
+        s_unitConverter->SendCommand(Command::Decimal);
+        s_unitConverter->SendCommand(Command::Four);
+        s_unitConverter->SendCommand(Command::Three);
+        s_unitConverter->SendCommand(Command::Backspace);
+
+        VERIFY_IS_TRUE(s_testVMCallback->CheckDisplayValues(wstring(L"20.4"), wstring(L"20.4")));
+        s_unitConverter->SendCommand(Command::Backspace);
+        VERIFY_IS_TRUE(s_testVMCallback->CheckDisplayValues(wstring(L"20."), wstring(L"20")));
+        s_unitConverter->SendCommand(Command::Backspace);
+        VERIFY_IS_TRUE(s_testVMCallback->CheckDisplayValues(wstring(L"20"), wstring(L"20")));
+        s_unitConverter->SendCommand(Command::Backspace);
+        VERIFY_IS_TRUE(s_testVMCallback->CheckDisplayValues(wstring(L"2"), wstring(L"2")));
+        s_unitConverter->SendCommand(Command::Backspace);
+        VERIFY_IS_TRUE(s_testVMCallback->CheckDisplayValues(wstring(L"0"), wstring(L"0")));
+    }
+
+    // Verify a basic copy paste steam. '20.43' with backspace button pressed
+    void UnitConverterTest::UnitConverterTestClear()
+    {
+        s_unitConverter->SendCommand(Command::Two);
+        s_unitConverter->SendCommand(Command::Zero);
+        s_unitConverter->SendCommand(Command::Decimal);
+        s_unitConverter->SendCommand(Command::Four);
+        s_unitConverter->SendCommand(Command::Three);
+        s_unitConverter->SendCommand(Command::Clear);
+
+        VERIFY_IS_TRUE(s_testVMCallback->CheckDisplayValues(wstring(L"0"), wstring(L"0")));
+    }
+
     // Check the getter functions
     void UnitConverterTest::UnitConverterTestGetters()
     {
@@ -325,32 +360,16 @@ namespace UnitConverterUnitTests
         VERIFY_IS_TRUE(s_testVMCallback->CheckSuggestedValues(vector<tuple<wstring, Unit>>()));
     }
 
-    // Test serialization
-    void UnitConverterTest::UnitConverterTestSerialization()
-    {
-        wstring test1 = wstring(L"4;Kilograms;Kg;0;0;0;|3;Pounds;Lb;1;1;0;|2;0;Weight;|1;1;0;52.8;116.4039;|1;1;Length;,2;0;Weight;,|1;1;Length;[1;Inches;In;1;"
-                                L"1;0;,2;Feet;Ft;0;0;0;,[]2;0;Weight;[3;Pounds;Lb;1;1;0;,4;Kilograms;Kg;0;0;0;,[]|1;Inches;In;1;1;0;[1;Inches;In;1;1;0;:1;0;0;:"
-                                L",2;Feet;Ft;0;0;0;:0.08333333333333332870740406406185;0;0;:,[]2;Feet;Ft;0;0;0;[1;Inches;In;1;1;0;:12;0;0;:,2;Feet;Ft;0;0;0;:1;"
-                                L"0;0;:,[]3;Pounds;Lb;1;1;0;[3;Pounds;Lb;1;1;0;:1;0;0;:,4;Kilograms;Kg;0;0;0;:0.45359199999999999519673110626172;0;0;:,[]4;"
-                                L"Kilograms;Kg;0;0;0;[3;Pounds;Lb;1;1;0;:2.20461999999999980204279381723609;0;0;:,4;Kilograms;Kg;0;0;0;:1;0;0;:,[]|");
-        s_unitConverter->SendCommand(Command::Five);
-        s_unitConverter->SendCommand(Command::Two);
-        s_unitConverter->SendCommand(Command::Decimal);
-        s_unitConverter->SendCommand(Command::Eight);
-        s_unitConverter->SetCurrentCategory(s_testWeight);
-        s_unitConverter->SetCurrentUnitTypes(s_testKilograms, s_testPounds);
-        VERIFY_IS_TRUE(s_unitConverter->Serialize().compare(test1) == 0);
-    }
 
     // Test input escaping
     void UnitConverterTest::UnitConverterTestQuote()
     {
-        wstring input1 = L"Weight";
-        wstring output1 = L"Weight";
-        wstring input2 = L"{p}Weig;[ht|";
-        wstring output2 = L"{lb}p{rb}Weig{sc}{lc}ht{p}";
-        wstring input3 = L"{{{t;s}}},:]";
-        wstring output3 = L"{lb}{lb}{lb}t{sc}s{rb}{rb}{rb}{cm}{co}{rc}";
+        constexpr wstring_view input1 = L"Weight";
+        constexpr wstring_view output1 = L"Weight";
+        constexpr wstring_view input2 = L"{p}Weig;[ht|";
+        constexpr wstring_view output2 = L"{lb}p{rb}Weig{sc}{lc}ht{p}";
+        constexpr wstring_view input3 = L"{{{t;s}}},:]";
+        constexpr wstring_view output3 = L"{lb}{lb}{lb}t{sc}s{rb}{rb}{rb}{cm}{co}{rc}";
         VERIFY_IS_TRUE(UnitConverter::Quote(input1) == output1);
         VERIFY_IS_TRUE(UnitConverter::Quote(input2) == output2);
         VERIFY_IS_TRUE(UnitConverter::Quote(input3) == output3);
@@ -359,26 +378,13 @@ namespace UnitConverterUnitTests
     // Test output unescaping
     void UnitConverterTest::UnitConverterTestUnquote()
     {
-        wstring input1 = L"Weight";
-        wstring input2 = L"{p}Weig;[ht|";
-        wstring input3 = L"{{{t;s}}},:]";
+        constexpr wstring_view input1 = L"Weight";
+        constexpr wstring_view input2 = L"{p}Weig;[ht|";
+        constexpr wstring_view input3 = L"{{{t;s}}},:]";
         VERIFY_IS_TRUE(UnitConverter::Unquote(input1) == input1);
         VERIFY_IS_TRUE(UnitConverter::Unquote(UnitConverter::Quote(input1)) == input1);
         VERIFY_IS_TRUE(UnitConverter::Unquote(UnitConverter::Quote(input2)) == input2);
         VERIFY_IS_TRUE(UnitConverter::Unquote(UnitConverter::Quote(input3)) == input3);
-    }
-
-    // Test de-serialization
-    void UnitConverterTest::UnitConverterTestDeSerialization()
-    {
-        wstring test1 = wstring(L"4;Kilograms;Kg;0;0;0;|3;Pounds;Lb;1;1;0;|2;0;Weight;|1;1;0;52.8;116.4039;|1;1;Length;,2;0;Weight;,|1;1;Length;[1;Inches;In;1;"
-                                L"1;0;,2;Feet;Ft;0;0;0;,[]2;0;Weight;[3;Pounds;Lb;1;1;0;,4;Kilograms;Kg;0;0;0;,[]|1;Inches;In;1;1;0;[1;Inches;In;1;1;0;:1;0;0;:"
-                                L",2;Feet;Ft;0;0;0;:0.08333333333333332870740406406185;0;0;:,[]2;Feet;Ft;0;0;0;[1;Inches;In;1;1;0;:12;0;0;:,2;Feet;Ft;0;0;0;:1;"
-                                L"0;0;:,[]3;Pounds;Lb;1;1;0;[3;Pounds;Lb;1;1;0;:1;0;0;:,4;Kilograms;Kg;0;0;0;:0.45359199999999999519673110626172;0;0;:,[]4;"
-                                L"Kilograms;Kg;0;0;0;[3;Pounds;Lb;1;1;0;:2.20461999999999980204279381723609;0;0;:,4;Kilograms;Kg;0;0;0;:1;0;0;:,[]|");
-        s_unitConverter->DeSerialize(test1);
-        VERIFY_IS_TRUE(s_testVMCallback->CheckDisplayValues(wstring(L"52.8"), wstring(L"116.4039")));
-        VERIFY_IS_TRUE(s_testVMCallback->CheckSuggestedValues(vector<tuple<wstring, Unit>>()));
     }
 
     // Test backspace commands
@@ -472,7 +478,7 @@ namespace UnitConverterUnitTests
         s_unitConverter->SendCommand(Command::Six);
         s_unitConverter->SendCommand(Command::Seven);
         s_unitConverter->SendCommand(Command::Eight);
-        VERIFY_IS_TRUE(s_testVMCallback->CheckDisplayValues(wstring(L"12345678"), wstring(L"27217528.63236")));
+        VERIFY_IS_TRUE(s_testVMCallback->CheckDisplayValues(wstring(L"12345678"), wstring(L"27217529")));
     }
 
     // Test large values

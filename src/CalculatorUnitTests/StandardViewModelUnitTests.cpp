@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft Corporation. All rights reserved.
+// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
 #include "pch.h"
@@ -9,6 +9,7 @@
 
 #include "CalcViewModel/StandardCalculatorViewModel.h"
 #include "CalcViewModel/Common/CalculatorButtonPressedEventArgs.h"
+#include "Helpers.h"
 
 using namespace CalculationManager;
 using namespace CalculatorApp;
@@ -16,9 +17,24 @@ using namespace CalculatorApp::Common;
 using namespace CalculatorApp::ViewModel;
 using namespace Platform;
 using namespace Microsoft::VisualStudio::CppUnitTestFramework;
+using namespace Windows::Foundation::Collections;
 
 namespace CalculatorUnitTests
 {
+    template <typename T>
+    void CompareVector(IVector<T> ^ vecA, IVector<T> ^ vecB)
+    {
+        if (vecA->Size != vecB->Size)
+        {
+            Assert::Fail();
+        }
+
+        for (unsigned int i = 0; i < vecA->Size; ++i)
+        {
+            VERIFY_ARE_EQUAL(vecA->GetAt(i), vecB->GetAt(i));
+        }
+    }
+
     void ChangeMode(StandardCalculatorViewModel ^ viewModel, int mode)
     {
         if (mode == 0)
@@ -75,7 +91,6 @@ namespace CalculatorUnitTests
             viewModel->ButtonPressed->Execute(NumbersAndOperatorsEnum::Clear);
             viewModel->ButtonPressed->Execute(NumbersAndOperatorsEnum::ClearEntry);
             viewModel->ClearMemoryCommand->Execute(nullptr);
-            viewModel->Deserialize(ref new Platform::Array<unsigned char>(0));
         }
 
         TESTITEM* currentItem = item;
@@ -88,10 +103,6 @@ namespace CalculatorUnitTests
             if (currentItem->expectedPrimaryDisplay != L"N/A")
             {
                 VERIFY_ARE_EQUAL(Platform::StringReference(currentItem->expectedPrimaryDisplay.c_str()), viewModel->DisplayValue);
-            }
-            if (currentItem->expectedExpressions != L"N/A" && viewModel->DisplayStringExpression != nullptr)
-            {
-                VERIFY_ARE_EQUAL(Platform::StringReference(currentItem->expectedExpressions.c_str()), viewModel->DisplayStringExpression);
             }
             currentItem++;
         }
@@ -108,18 +119,12 @@ namespace CalculatorUnitTests
             m_decimalSeparator = ref new Platform::String(m_engineResourceProvider->GetCEngineString(L"sDecimal").c_str());
         }
 
-        void ValidateViewModelValueAndExpression(String ^ value, String ^ expression = nullptr)
+        void ValidateViewModelValue(String ^ value)
         {
             String ^ displayValue = m_viewModel->DisplayValue;
-            String ^ displayExpression = m_viewModel->DisplayStringExpression;
             if (value != nullptr)
             {
                 VERIFY_ARE_EQUAL(value, displayValue);
-            }
-
-            if (expression != nullptr)
-            {
-                VERIFY_ARE_EQUAL(expression, displayExpression);
             }
         }
 
@@ -153,7 +158,6 @@ namespace CalculatorUnitTests
             StandardCalculatorViewModel ^ vmconstructortest = ref new StandardCalculatorViewModel();
             vmconstructortest->IsStandard = true;
             String ^ displayValue = vmconstructortest->DisplayValue;
-            String ^ displayExpression = vmconstructortest->DisplayStringExpression;
             String ^ calculationResultAutomationName = vmconstructortest->CalculationResultAutomationName;
 
             VERIFY_ARE_EQUAL(StringReference(L"0"), displayValue);
@@ -359,27 +363,25 @@ namespace CalculatorUnitTests
         /// Low-level test of character mapping
         TEST_METHOD(VerifyCorrectCharacterMapping)
         {
-            bool canSendNegate = false;
-
             // Valid numbers
-            NumbersAndOperatorsEnum n = m_viewModel->MapCharacterToButtonId(L'0', canSendNegate);
+            NumbersAndOperatorsEnum n = m_viewModel->MapCharacterToButtonId(L'0').buttonId;
             ValidateNumbersAndOperatorsAreEqual(n, NumbersAndOperatorsEnum::Zero);
 
-            n = m_viewModel->MapCharacterToButtonId(L'1', canSendNegate);
+            n = m_viewModel->MapCharacterToButtonId(L'1').buttonId;
             ValidateNumbersAndOperatorsAreEqual(n, NumbersAndOperatorsEnum::One);
 
             // Valid operators
-            n = m_viewModel->MapCharacterToButtonId(L'+', canSendNegate);
+            n = m_viewModel->MapCharacterToButtonId(L'+').buttonId;
             ValidateNumbersAndOperatorsAreEqual(n, NumbersAndOperatorsEnum::Add);
 
-            n = m_viewModel->MapCharacterToButtonId(L'=', canSendNegate);
+            n = m_viewModel->MapCharacterToButtonId(L'=').buttonId;
             ValidateNumbersAndOperatorsAreEqual(n, NumbersAndOperatorsEnum::Equals);
 
-            n = m_viewModel->MapCharacterToButtonId(L'a', canSendNegate);
+            n = m_viewModel->MapCharacterToButtonId(L'a').buttonId;
             ValidateNumbersAndOperatorsAreEqual(n, NumbersAndOperatorsEnum::A);
 
             // Invalid character
-            n = m_viewModel->MapCharacterToButtonId(L'$', canSendNegate);
+            n = m_viewModel->MapCharacterToButtonId(L'$').buttonId;
             ValidateNumbersAndOperatorsAreEqual(n, NumbersAndOperatorsEnum::None);
         }
 
@@ -388,26 +390,26 @@ namespace CalculatorUnitTests
         {
             m_viewModel->IsScientific = false;
 
-            m_viewModel->OnPaste("-0.99", ViewMode::Standard);
-            ValidateViewModelValueAndExpression("-0" + m_decimalSeparator + "99", "");
+            m_viewModel->OnPaste("-0.99");
+            ValidateViewModelValue("-0" + m_decimalSeparator + "99");
 
-            m_viewModel->OnPaste("1+1=", ViewMode::Standard);
-            ValidateViewModelValueAndExpression("2", "");
+            m_viewModel->OnPaste("1+1=");
+            ValidateViewModelValue("2");
 
             // This result is not obvious: it's the result of the previous operation
-            m_viewModel->OnPaste("0=", ViewMode::Standard);
-            ValidateViewModelValueAndExpression("1", "");
+            m_viewModel->OnPaste("0=");
+            ValidateViewModelValue("1");
 
             // Negative value
-            m_viewModel->OnPaste("-1", ViewMode::Standard);
-            ValidateViewModelValueAndExpression("-1", "");
+            m_viewModel->OnPaste("-1");
+            ValidateViewModelValue("-1");
 
             // Negated expression
-            m_viewModel->OnPaste("-(1+1)", ViewMode::Standard);
+            m_viewModel->OnPaste("-(1+1)");
             ValidateViewModelValueAndSecondaryExpression("-2", "negate(1 + 1)");
 
             // More complicated Negated expression
-            m_viewModel->OnPaste("-(-(-1))", ViewMode::Standard);
+            m_viewModel->OnPaste("-(-(-1))");
             ValidateViewModelValueAndSecondaryExpression("-1", "negate(0 - (0 - 1))");
 
             // Switch to scientific mode
@@ -416,16 +418,25 @@ namespace CalculatorUnitTests
             VERIFY_IS_FALSE(m_viewModel->IsFToEChecked);
 
             //// Positive exponent
-            m_viewModel->OnPaste("1.23e+10", ViewMode::Scientific);
-            ValidateViewModelValueAndExpression("1" + m_decimalSeparator + "23e+10", "");
+            m_viewModel->OnPaste("1.23e+10");
+            ValidateViewModelValue("1" + m_decimalSeparator + "23e+10");
+
+            m_viewModel->OnPaste("1.23e10");
+            ValidateViewModelValue("1" + m_decimalSeparator + "23e+10");
+
+            m_viewModel->OnPaste("135e10");
+            ValidateViewModelValue("135" + m_decimalSeparator + "e+10");
 
             //// Negative exponent
-            m_viewModel->OnPaste("1.23e-10", ViewMode::Scientific);
-            ValidateViewModelValueAndExpression("1" + m_decimalSeparator + "23e-10", "");
+            m_viewModel->OnPaste("1.23e-10");
+            ValidateViewModelValue("1" + m_decimalSeparator + "23e-10");
 
             //// Uppercase E (for exponent)
-            m_viewModel->OnPaste("1.23E-10", ViewMode::Scientific);
-            ValidateViewModelValueAndExpression("1" + m_decimalSeparator + "23e-10", "");
+            m_viewModel->OnPaste("1.23E-10");
+            ValidateViewModelValue("1" + m_decimalSeparator + "23e-10");
+
+            m_viewModel->OnPaste("135E10");
+            ValidateViewModelValue("135" + m_decimalSeparator + "e+10");
         }
 
         // Verify Calculator CalculationResultAutomationName is set correctly
@@ -484,29 +495,35 @@ namespace CalculatorUnitTests
                                  { NumbersAndOperatorsEnum::F, L"F", L"" },
                                  { NumbersAndOperatorsEnum::None, L"", L"" } };
             ValidateViewModelByCommands(m_viewModel, items, false);
-            VERIFY_ARE_EQUAL(Utils::GetStringValue(m_viewModel->HexDisplayValue), StringReference(L"F"));
-            VERIFY_ARE_EQUAL(Utils::GetStringValue(m_viewModel->DecimalDisplayValue), StringReference(L"15"));
-            VERIFY_ARE_EQUAL(Utils::GetStringValue(m_viewModel->OctalDisplayValue), StringReference(L"17"));
-            VERIFY_ARE_EQUAL(Utils::GetStringValue(m_viewModel->BinaryDisplayValue), StringReference(L"1111"));
+            VERIFY_ARE_EQUAL(m_viewModel->HexDisplayValue, StringReference(L"F"));
+            VERIFY_ARE_EQUAL(m_viewModel->DecimalDisplayValue, StringReference(L"15"));
+            VERIFY_ARE_EQUAL(m_viewModel->OctalDisplayValue, StringReference(L"17"));
+            VERIFY_ARE_EQUAL(m_viewModel->BinaryDisplayValue, StringReference(L"1111"));
+            auto val = ref new Platform::Collections::Vector<bool>(64, false);
+            val->SetAt(0, true);
+            val->SetAt(1, true);
+            val->SetAt(2, true);
+            val->SetAt(3, true);
+            CompareVector<bool>(m_viewModel->BinaryDigits, val);
         }
 
         // Test Button disabling in different Radixes
         TEST_METHOD(ProgrammerModeButtonsDisable)
         {
             /* m_viewModel->IsProgrammer = true;
-            m_viewModel->SwitchProgrammerModeBase(OCT_RADIX);
+            m_viewModel->SwitchProgrammerModeBase(RadixType::Octal);
             VERIFY_IS_TRUE(m_viewModel->AreOCTButtonsEnabled);
             VERIFY_IS_FALSE(m_viewModel->AreHEXButtonsEnabled);
             VERIFY_IS_FALSE(m_viewModel->AreDECButtonsEnabled);
-            m_viewModel->SwitchProgrammerModeBase(DEC_RADIX);
+            m_viewModel->SwitchProgrammerModeBase(RadixType::Decimal);
             VERIFY_IS_FALSE(m_viewModel->AreHEXButtonsEnabled);
             VERIFY_IS_TRUE(m_viewModel->AreDECButtonsEnabled);
             VERIFY_IS_TRUE(m_viewModel->AreOCTButtonsEnabled);
-            m_viewModel->SwitchProgrammerModeBase(HEX_RADIX);
+            m_viewModel->SwitchProgrammerModeBase(RadixType::Hex);
             VERIFY_IS_TRUE(m_viewModel->AreHEXButtonsEnabled);
             VERIFY_IS_TRUE(m_viewModel->AreDECButtonsEnabled);
             VERIFY_IS_TRUE(m_viewModel->AreOCTButtonsEnabled);
-            m_viewModel->SwitchProgrammerModeBase(BIN_RADIX);
+            m_viewModel->SwitchProgrammerModeBase(RadixType::Binary);
             VERIFY_IS_FALSE(m_viewModel->AreHEXButtonsEnabled);
             VERIFY_IS_FALSE(m_viewModel->AreDECButtonsEnabled);
             VERIFY_IS_FALSE(m_viewModel->AreOCTButtonsEnabled);*/
@@ -531,10 +548,28 @@ namespace CalculatorUnitTests
                 { NumbersAndOperatorsEnum::None, L"1", L"" },
             };
             ValidateViewModelByCommands(m_viewModel, items, true);
-            VERIFY_ARE_EQUAL(Utils::GetStringValue(m_viewModel->HexDisplayValue), StringReference(L"75B CD15"));
-            VERIFY_ARE_EQUAL(Utils::GetStringValue(m_viewModel->DecimalDisplayValue), StringReference(L"123,456,789"));
-            VERIFY_ARE_EQUAL(Utils::GetStringValue(m_viewModel->OctalDisplayValue), StringReference(L"726 746 425"));
-            VERIFY_ARE_EQUAL(Utils::GetStringValue(m_viewModel->BinaryDisplayValue), StringReference(L"0111 0101 1011 1100 1101 0001 0101"));
+            VERIFY_ARE_EQUAL(m_viewModel->HexDisplayValue, StringReference(L"75B CD15"));
+            VERIFY_ARE_EQUAL(m_viewModel->DecimalDisplayValue, StringReference(L"123,456,789"));
+            VERIFY_ARE_EQUAL(m_viewModel->OctalDisplayValue, StringReference(L"726 746 425"));
+            VERIFY_ARE_EQUAL(m_viewModel->BinaryDisplayValue, StringReference(L"0111 0101 1011 1100 1101 0001 0101"));
+            auto val = ref new Platform::Collections::Vector<bool>(64, false);
+            val->SetAt(0, true);
+            val->SetAt(2, true);
+            val->SetAt(4, true);
+            val->SetAt(8, true);
+            val->SetAt(10, true);
+            val->SetAt(11, true);
+            val->SetAt(14, true);
+            val->SetAt(15, true);
+            val->SetAt(16, true);
+            val->SetAt(17, true);
+            val->SetAt(19, true);
+            val->SetAt(20, true);
+            val->SetAt(22, true);
+            val->SetAt(24, true);
+            val->SetAt(25, true);
+            val->SetAt(26, true);
+            CompareVector<bool>(m_viewModel->BinaryDigits, val);
         }
 
         // Test Not functionality
@@ -547,13 +582,16 @@ namespace CalculatorUnitTests
                                  { NumbersAndOperatorsEnum::Not, L"-2", L"~(1)" },
                                  { NumbersAndOperatorsEnum::None, L"N/A", L"N/A" } };
             ValidateViewModelByCommands(m_viewModel, items, false);
-            VERIFY_ARE_EQUAL(Utils::GetStringValue(m_viewModel->HexDisplayValue), StringReference(L"FFFF FFFF FFFF FFFE"));
-            VERIFY_ARE_EQUAL(Utils::GetStringValue(m_viewModel->DecimalDisplayValue), StringReference(L"-2"));
-            VERIFY_ARE_EQUAL(Utils::GetStringValue(m_viewModel->OctalDisplayValue), StringReference(L"1 777 777 777 777 777 777 776"));
+            VERIFY_ARE_EQUAL(m_viewModel->HexDisplayValue, StringReference(L"FFFF FFFF FFFF FFFE"));
+            VERIFY_ARE_EQUAL(m_viewModel->DecimalDisplayValue, StringReference(L"-2"));
+            VERIFY_ARE_EQUAL(m_viewModel->OctalDisplayValue, StringReference(L"1 777 777 777 777 777 777 776"));
             VERIFY_ARE_EQUAL(
-                Utils::GetStringValue(m_viewModel->BinaryDisplayValue),
+                m_viewModel->BinaryDisplayValue,
                 StringReference(L"1111 1111 1111 1111 1111 1111 1111 1111 1111 1111 1111 1111 1111 1111 1111 1110"));
             VERIFY_ARE_EQUAL(m_viewModel->DisplayValue, StringReference(L"-2"));
+            auto val = ref new Platform::Collections::Vector<bool>(64, true);
+            val->SetAt(0, false);
+            CompareVector<bool>(m_viewModel->BinaryDigits, val);
         }
 
         // Test And Or functionality
@@ -738,13 +776,13 @@ namespace CalculatorUnitTests
             m_viewModel->OnMemoryItemPressed(ref new Platform::Box<int>(0));
             VERIFY_ARE_EQUAL(Platform::StringReference(L"-1,001"), m_viewModel->DisplayValue);
             MemoryItemViewModel ^ memorySlotStandard = (MemoryItemViewModel ^) m_viewModel->MemorizedNumbers->GetAt(0);
-            VERIFY_ARE_EQUAL(Platform::StringReference(L"-1,001"), Utils::GetStringValue(memorySlotStandard->Value));
+            VERIFY_ARE_EQUAL(Platform::StringReference(L"-1,001"), memorySlotStandard->Value);
             ChangeMode(m_viewModel, 1 /*scientific*/);
             MemoryItemViewModel ^ memorySlotScientific = (MemoryItemViewModel ^) m_viewModel->MemorizedNumbers->GetAt(0);
-            VERIFY_ARE_EQUAL(Platform::StringReference(L"-1,001"), Utils::GetStringValue(memorySlotScientific->Value));
+            VERIFY_ARE_EQUAL(Platform::StringReference(L"-1,001"), memorySlotScientific->Value);
             ChangeMode(m_viewModel, 2 /*Programmer*/);
             MemoryItemViewModel ^ memorySlotProgrammer = (MemoryItemViewModel ^) m_viewModel->MemorizedNumbers->GetAt(0);
-            VERIFY_ARE_EQUAL(Platform::StringReference(L"-1,001"), Utils::GetStringValue(memorySlotProgrammer->Value));
+            VERIFY_ARE_EQUAL(Platform::StringReference(L"-1,001"), memorySlotProgrammer->Value);
         }
 
         // When decimal number is saved in memory
@@ -762,13 +800,13 @@ namespace CalculatorUnitTests
             m_viewModel->OnMemoryItemPressed(ref new Platform::Box<int>(0));
             VERIFY_ARE_EQUAL(Platform::StringReference(L"1,001.1"), m_viewModel->DisplayValue);
             MemoryItemViewModel ^ memorySlotStandard = (MemoryItemViewModel ^) m_viewModel->MemorizedNumbers->GetAt(0);
-            VERIFY_ARE_EQUAL(Platform::StringReference(L"1,001.1"), Utils::GetStringValue(memorySlotStandard->Value));
+            VERIFY_ARE_EQUAL(Platform::StringReference(L"1,001.1"), memorySlotStandard->Value);
             ChangeMode(m_viewModel, 1 /*Scientific*/);
             MemoryItemViewModel ^ memorySlotScientific = (MemoryItemViewModel ^) m_viewModel->MemorizedNumbers->GetAt(0);
-            VERIFY_ARE_EQUAL(Platform::StringReference(L"1,001.1"), Utils::GetStringValue(memorySlotScientific->Value));
+            VERIFY_ARE_EQUAL(Platform::StringReference(L"1,001.1"), memorySlotScientific->Value);
             ChangeMode(m_viewModel, 2 /*Programmer*/);
             MemoryItemViewModel ^ memorySlotProgrammer = (MemoryItemViewModel ^) m_viewModel->MemorizedNumbers->GetAt(0);
-            VERIFY_ARE_EQUAL(Platform::StringReference(L"1,001"), Utils::GetStringValue(memorySlotProgrammer->Value));
+            VERIFY_ARE_EQUAL(Platform::StringReference(L"1,001"), memorySlotProgrammer->Value);
         }
 
         // When negative decimal number is saved in memory
@@ -827,7 +865,7 @@ namespace CalculatorUnitTests
             m_viewModel->OnMemoryItemPressed(ref new Box<int>(0));
             VERIFY_ARE_EQUAL(Platform::StringReference(L"255"), m_viewModel->DisplayValue);
             MemoryItemViewModel ^ memorySlot = (MemoryItemViewModel ^) m_viewModel->MemorizedNumbers->GetAt(0);
-            VERIFY_ARE_EQUAL(Platform::StringReference(L"255"), Utils::GetStringValue(memorySlot->Value));
+            VERIFY_ARE_EQUAL(Platform::StringReference(L"255"), memorySlot->Value);
         }
 
         TEST_METHOD(OnMemorySavedInHexRadixAndRadixChanges)
@@ -841,15 +879,15 @@ namespace CalculatorUnitTests
             };
             ValidateViewModelByCommands(m_viewModel, items, true);
             m_viewModel->OnMemoryButtonPressed();
-            m_viewModel->SwitchProgrammerModeBase(RADIX_TYPE::OCT_RADIX);
+            m_viewModel->SwitchProgrammerModeBase(NumberBase::OctBase);
             MemoryItemViewModel ^ memorySlotOct = (MemoryItemViewModel ^) m_viewModel->MemorizedNumbers->GetAt(0);
-            VERIFY_ARE_EQUAL(Platform::StringReference(L"377"), Utils::GetStringValue(memorySlotOct->Value));
-            m_viewModel->SwitchProgrammerModeBase(RADIX_TYPE::DEC_RADIX);
+            VERIFY_ARE_EQUAL(Platform::StringReference(L"377"), memorySlotOct->Value);
+            m_viewModel->SwitchProgrammerModeBase(NumberBase::DecBase);
             MemoryItemViewModel ^ memorySlotDec = (MemoryItemViewModel ^) m_viewModel->MemorizedNumbers->GetAt(0);
-            VERIFY_ARE_EQUAL(Platform::StringReference(L"255"), Utils::GetStringValue(memorySlotDec->Value));
-            m_viewModel->SwitchProgrammerModeBase(RADIX_TYPE::BIN_RADIX);
+            VERIFY_ARE_EQUAL(Platform::StringReference(L"255"), memorySlotDec->Value);
+            m_viewModel->SwitchProgrammerModeBase(NumberBase::BinBase);
             MemoryItemViewModel ^ memorySlotBin = (MemoryItemViewModel ^) m_viewModel->MemorizedNumbers->GetAt(0);
-            VERIFY_ARE_EQUAL(Platform::StringReference(L"1111 1111"), Utils::GetStringValue(memorySlotBin->Value));
+            VERIFY_ARE_EQUAL(Platform::StringReference(L"1111 1111"), memorySlotBin->Value);
         }
 
         // When memory button is pressed more than max number of slots allowed,
@@ -928,7 +966,7 @@ namespace CalculatorUnitTests
             m_viewModel->OnMemoryItemPressed(1);
             m_viewModel->OnMemoryAdd(ref new Platform::Box<int>(0));
             MemoryItemViewModel ^ memorySlot = (MemoryItemViewModel ^) m_viewModel->MemorizedNumbers->GetAt(0);
-            VERIFY_ARE_EQUAL(Platform::StringReference(L"3,003"), Utils::GetStringValue(memorySlot->Value));
+            VERIFY_ARE_EQUAL(Platform::StringReference(L"3,003"), memorySlot->Value);
         }
 
         // Verify that raw, unformatted numbers are provided correctly

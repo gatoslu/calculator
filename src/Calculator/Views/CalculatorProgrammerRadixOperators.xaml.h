@@ -29,16 +29,33 @@ namespace CalculatorApp
         Platform::String ^ ParenthesisCountToString(unsigned int count);
 
         DEPENDENCY_PROPERTY_OWNER(CalculatorProgrammerRadixOperators);
+        void checkDefaultBitShift();
 
     private:
-        void Shift_Clicked(Platform::Object ^ sender, Windows::UI::Xaml::RoutedEventArgs ^ e);
-        void SetVisibilityBinding(Windows::UI::Xaml::FrameworkElement ^ element, Platform::String ^ path, Windows::UI::Xaml::Data::IValueConverter ^ converter);
-        void OnLoaded(Platform::Object ^ sender, Windows::UI::Xaml::RoutedEventArgs ^ e);
-        void OnUnloaded(Platform::Object ^ sender, Windows::UI::Xaml::RoutedEventArgs ^ e);
-        void ProgModeRadixChange();
+        enum class BitShiftMode
+        {
+            Arithmetic,
+            LogicalShift,
+            RotateCircular,
+            RotateCarry
+        };
+
+        void BitshiftFlyout_Checked(Platform::Object ^ sender, Windows::UI::Xaml::RoutedEventArgs ^ e);
+        void FlyoutButton_Clicked(_In_ Platform::Object ^ sender, _In_ Windows::UI::Xaml::RoutedEventArgs ^ e);
+        void CollapseBitshiftButtons();
+        void LoadResourceStrings();
+        void LoadDeferredLoadButtons();
+        bool IsButtonLoaded();
 
         bool m_isErrorVisualState;
-        Windows::Foundation::EventRegistrationToken m_progModeRadixChangeToken;
         void OpenParenthesisButton_GotFocus(Platform::Object ^ sender, Windows::UI::Xaml::RoutedEventArgs ^ e);
+        void ClearEntryButton_LostFocus(Platform::Object ^ sender, Windows::UI::Xaml::RoutedEventArgs ^ e);
+        void ClearButton_LostFocus(Platform::Object ^ sender, Windows::UI::Xaml::RoutedEventArgs ^ e);
+        void BitShiftFlyout_Opened(Platform::Object ^ sender, Platform::Object ^ e);
+        BitShiftMode m_selectedShiftButtonMode;
+        Platform::String ^ m_arithmeticShiftButtonContent;
+        Platform::String ^ m_logicalShiftButtonContent;
+        Platform::String ^ m_rotateCircularButtonContent;
+        Platform::String ^ m_rotateCarryShiftButtonContent;
     };
 }
